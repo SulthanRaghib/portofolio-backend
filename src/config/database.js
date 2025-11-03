@@ -1,4 +1,3 @@
-// Coba import dari @prisma/client
 const { PrismaClient } = require("@prisma/client");
 
 const prisma =
