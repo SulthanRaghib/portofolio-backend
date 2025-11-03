@@ -65,15 +65,30 @@ exports.createProject = async (req, res, next) => {
     descriptionEn = sanitizeInput(descriptionEn);
     descriptionId = sanitizeInput(descriptionId);
 
-    // Parse technologies jika string
-    if (typeof technologies === "string") {
-      try {
-        technologies = JSON.parse(technologies);
-      } catch (e) {
+    // Parse technologies - LEBIH ROBUST
+    if (technologies) {
+      if (typeof technologies === "string") {
+        try {
+          // Coba parse sebagai JSON
+          technologies = JSON.parse(technologies);
+        } catch (e) {
+          // Jika gagal, coba split by comma (untuk backward compatibility)
+          technologies = technologies
+            .split(",")
+            .map((tech) => tech.trim())
+            .filter((tech) => tech.length > 0);
+        }
+      }
+
+      // Pastikan technologies adalah array
+      if (!Array.isArray(technologies)) {
         return res.status(400).json({
-          message: `Invalid technologies format, must be an array like ["Tech1", "Tech2"]`,
+          message: "Technologies must be an array or comma-separated string",
+          example: '["React", "Node.js"] or React,Node.js',
         });
       }
+    } else {
+      technologies = [];
     }
 
     // Validasi data
@@ -163,13 +178,26 @@ exports.updateProject = async (req, res, next) => {
       imageUrl = req.file.path;
     }
 
-    // Parse technologies jika string
-    if (technologies && typeof technologies === "string") {
-      try {
-        technologies = JSON.parse(technologies);
-      } catch (e) {
-        return res.status(400).json({ message: "Invalid technologies format" });
+    // Parse technologies - SAMA SEPERTI CREATE
+    if (technologies) {
+      if (typeof technologies === "string") {
+        try {
+          technologies = JSON.parse(technologies);
+        } catch (e) {
+          technologies = technologies
+            .split(",")
+            .map((tech) => tech.trim())
+            .filter((tech) => tech.length > 0);
+        }
       }
+
+      if (!Array.isArray(technologies)) {
+        return res.status(400).json({
+          message: "Technologies must be an array or comma-separated string",
+        });
+      }
+    } else {
+      technologies = existingProject.technologies;
     }
 
     const project = await prisma.project.update({
@@ -179,7 +207,7 @@ exports.updateProject = async (req, res, next) => {
         descriptionEn: descriptionEn || existingProject.descriptionEn,
         descriptionId: descriptionId || existingProject.descriptionId,
         image: imageUrl,
-        technologies: technologies || existingProject.technologies,
+        technologies,
         demoUrl: demoUrl !== undefined ? demoUrl : existingProject.demoUrl,
         githubUrl:
           githubUrl !== undefined ? githubUrl : existingProject.githubUrl,
