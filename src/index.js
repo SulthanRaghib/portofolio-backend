@@ -23,6 +23,19 @@ const limiter = rateLimit({
 });
 app.use("/api", limiter);
 
+// Testing environment variables
+app.get("/api/env-check", (req, res) => {
+  res.json({
+    DATABASE_URL: process.env.DATABASE_URL ? "✅ Exists" : "❌ Missing",
+    DIRECT_URL: process.env.DIRECT_URL ? "✅ Exists" : "❌ Missing",
+    JWT_SECRET: process.env.JWT_SECRET ? "✅ Exists" : "❌ Missing",
+    NODE_ENV: process.env.NODE_ENV,
+    CLOUDINARY_CLOUD_NAME: process.env.CLOUDINARY_CLOUD_NAME
+      ? "✅ Exists"
+      : "❌ Missing",
+  });
+});
+
 // Routes
 app.get("/api/health", (req, res) => {
   res.json({ status: "OK", message: "Server is running" });
