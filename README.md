@@ -12,6 +12,9 @@ A professional REST API backend for managing portfolio projects with authenticat
 
 - 🔐 **JWT Authentication** - Secure login system
 - 📁 **Project Management** - Full CRUD operations for portfolio projects
+- 📄 **Pagination** - Professional pagination with metadata and links
+- 🔍 **Search & Filter** - Search projects by title, description, or technologies
+- 📊 **Sorting** - Flexible sorting options for projects
 - 🌐 **Multi-language Support** - English & Indonesian descriptions
 - 🖼️ **Image Upload** - Cloudinary integration for optimized image hosting
 - 🔒 **Protected Routes** - Role-based access control
@@ -143,8 +146,45 @@ Authorization: Bearer <token>
 
 ```http
 GET /api/projects
+GET /api/projects?page=1&limit=10
 GET /api/projects?featured=true
-GET /api/projects?limit=10
+GET /api/projects?search=react
+GET /api/projects?sortBy=createdAt&sortOrder=desc
+```
+
+**Query Parameters:**
+
+- `page` - Page number (default: 1)
+- `limit` - Items per page (default: 10, max: 50)
+- `featured` - Filter featured projects (true/false)
+- `search` - Search in title, description, or technologies
+- `sortBy` - Sort field (title, createdAt, updatedAt, order, featured)
+- `sortOrder` - Sort direction (asc/desc)
+
+**Response:**
+
+```json
+{
+  "success": true,
+  "data": [...],
+  "pagination": {
+    "currentPage": 1,
+    "totalPages": 5,
+    "totalItems": 50,
+    "itemsPerPage": 10,
+    "hasNextPage": true,
+    "hasPrevPage": false,
+    "nextPage": 2,
+    "prevPage": null
+  },
+  "links": {
+    "self": "http://localhost:5000/api/projects?page=1&limit=10",
+    "first": "http://localhost:5000/api/projects?page=1&limit=10",
+    "last": "http://localhost:5000/api/projects?page=5&limit=10",
+    "next": "http://localhost:5000/api/projects?page=2&limit=10",
+    "prev": null
+  }
+}
 ```
 
 #### Get Single Project (Public)
@@ -211,7 +251,8 @@ portfolio-backend/
 │   │   ├── authRoutes.js
 │   │   └── projectRoutes.js
 │   ├── utils/
-│   │   └── validation.js     # Input validation
+│   │   ├── validation.js     # Input validation
+│   │   └── pagination.js     # Pagination utilities
 │   └── index.js              # App entry point
 ├── prisma/
 │   ├── schema.prisma         # Database schema

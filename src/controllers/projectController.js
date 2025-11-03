@@ -5,20 +5,79 @@ const {
   isValidUUID,
   sanitizeInput,
 } = require("../utils/validation");
+const {
+  createPaginationResponse,
+  getPaginationParams,
+  calculateSkip,
+} = require("../utils/pagination");
 
 exports.getAllProjects = async (req, res, next) => {
   try {
-    const { featured, limit } = req.query;
+    const { featured, search, sortBy, sortOrder } = req.query;
 
-    const where = featured === "true" ? { featured: true } : {};
+    // Get pagination parameters
+    const { page, limit } = getPaginationParams(req.query, 10, 50);
 
+    // Build where clause
+    const where = {};
+
+    if (featured === "true") {
+      where.featured = true;
+    }
+
+    // Search functionality (title or technologies)
+    if (search) {
+      where.OR = [
+        { title: { contains: search, mode: "insensitive" } },
+        { descriptionEn: { contains: search, mode: "insensitive" } },
+        { descriptionId: { contains: search, mode: "insensitive" } },
+        { technologies: { has: search } },
+      ];
+    }
+
+    // Build orderBy clause
+    let orderBy = [{ order: "asc" }, { createdAt: "desc" }];
+
+    if (sortBy) {
+      const validSortFields = [
+        "title",
+        "createdAt",
+        "updatedAt",
+        "order",
+        "featured",
+      ];
+      if (validSortFields.includes(sortBy)) {
+        const direction = sortOrder === "asc" ? "asc" : "desc";
+        orderBy = [{ [sortBy]: direction }];
+      }
+    }
+
+    // Get total count for pagination
+    const totalItems = await prisma.project.count({ where });
+
+    // Get paginated projects
     const projects = await prisma.project.findMany({
       where,
-      orderBy: [{ order: "asc" }, { createdAt: "desc" }],
-      take: limit ? parseInt(limit) : undefined,
+      orderBy,
+      skip: calculateSkip(page, limit),
+      take: limit,
     });
 
-    res.json({ projects });
+    // Create base URL for pagination links
+    const protocol = req.protocol;
+    const host = req.get("host");
+    const baseUrl = `${protocol}://${host}${req.baseUrl}${req.path}`;
+
+    // Return paginated response
+    const response = createPaginationResponse({
+      page,
+      limit,
+      totalItems,
+      data: projects,
+      baseUrl,
+    });
+
+    res.json(response);
   } catch (error) {
     next(error);
   }
