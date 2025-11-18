@@ -97,11 +97,55 @@ const isValidUUID = (uuid) => {
   return uuidRegex.test(uuid);
 };
 
+// Validasi certification data
+const validateCertification = (data) => {
+  const errors = {};
+
+  if (!data.title || data.title.trim().length === 0) {
+    errors.title = "Title is required";
+  }
+
+  if (!data.issuer || data.issuer.trim().length === 0) {
+    errors.issuer = "Issuer is required";
+  }
+
+  if (!data.issuedAt) {
+    errors.issuedAt = "Issued date is required";
+  } else if (isNaN(new Date(data.issuedAt).getTime())) {
+    errors.issuedAt = "Invalid date format";
+  }
+
+  if (data.credentialUrl && !isValidUrl(data.credentialUrl)) {
+    errors.credentialUrl = "Invalid Credential URL format";
+  }
+
+  // credentialId optional but limit length
+  if (data.credentialId && typeof data.credentialId === "string" && data.credentialId.length > 200) {
+    errors.credentialId = "credentialId must be less than 200 characters";
+  }
+
+  // skills should be an array if provided
+  if (data.skills !== undefined) {
+    if (!Array.isArray(data.skills)) {
+      errors.skills = "Skills must be an array of strings";
+    } else {
+      const invalid = data.skills.some((s) => typeof s !== "string" || s.trim().length === 0);
+      if (invalid) errors.skills = "Each skill must be a non-empty string";
+    }
+  }
+
+  return {
+    isValid: Object.keys(errors).length === 0,
+    errors,
+  };
+};
+
 module.exports = {
   isValidEmail,
   isValidUrl,
   validateProject,
   validateLogin,
+  validateCertification,
   sanitizeInput,
   isValidUUID,
 };
