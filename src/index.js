@@ -6,6 +6,7 @@ const rateLimit = require("express-rate-limit");
 
 const authRoutes = require("./routes/authRoutes");
 const projectRoutes = require("./routes/projectRoutes");
+const certificationRoutes = require("./routes/certificationRoutes");
 const errorHandler = require("./middleware/errorHandler");
 
 const app = express();
@@ -43,6 +44,7 @@ app.get("/api/health", (req, res) => {
 
 app.use("/api/auth", authRoutes);
 app.use("/api/projects", projectRoutes);
+app.use("/api/certifications", certificationRoutes)
 
 // Error handler
 app.use(errorHandler);
