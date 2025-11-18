@@ -11,6 +11,33 @@ const {
   calculateSkip,
 } = require("../utils/pagination");
 
+// Helper to extract publicId and resource type from Cloudinary URL
+const extractPublicIdAndResourceType = (url) => {
+  if (!url || typeof url !== "string") return { publicId: null, resourceType: "image" };
+
+  if (url.includes("/raw/upload/")) {
+    const filename = url.split("/raw/upload/").pop();
+    const lastDot = filename.lastIndexOf(".");
+    const publicId = lastDot !== -1 ? filename.substring(0, lastDot) : filename;
+    return { publicId, resourceType: "raw" };
+  }
+
+  if (url.includes("/image/upload/")) {
+    const filename = url.split("/image/upload/").pop();
+    const lastDot = filename.lastIndexOf(".");
+    const publicId = lastDot !== -1 ? filename.substring(0, lastDot) : filename;
+    return { publicId, resourceType: "image" };
+  }
+
+  // Fallback to extension-based detection
+  const filename = url.split("/").pop();
+  const lastDot = filename.lastIndexOf(".");
+  const ext = lastDot !== -1 ? filename.substring(lastDot + 1).toLowerCase() : "";
+  const publicId = lastDot !== -1 ? filename.substring(0, lastDot) : filename;
+  const resourceType = ext === "pdf" ? "raw" : "image";
+  return { publicId, resourceType };
+};
+
 exports.getAllProjects = async (req, res, next) => {
   try {
     const { featured, search, sortBy, sortOrder } = req.query;
@@ -228,9 +255,11 @@ exports.updateProject = async (req, res, next) => {
 
     if (req.file) {
       // Hapus gambar lama dari Cloudinary
-      const publicId = existingProject.image.split("/").pop().split(".")[0];
+      const { publicId, resourceType } = extractPublicIdAndResourceType(existingProject.image);
       try {
-        await cloudinary.uploader.destroy(`portfolio-projects/${publicId}`);
+        if (publicId) {
+          await cloudinary.uploader.destroy(`portfolio-projects/${publicId}`, { resource_type: resourceType });
+        }
       } catch (error) {
         console.error("Error deleting old image:", error);
       }
@@ -302,9 +331,11 @@ exports.deleteProject = async (req, res, next) => {
     }
 
     // Hapus gambar dari Cloudinary
-    const publicId = project.image.split("/").pop().split(".")[0];
+    const { publicId, resourceType } = extractPublicIdAndResourceType(project.image);
     try {
-      await cloudinary.uploader.destroy(`portfolio-projects/${publicId}`);
+      if (publicId) {
+        await cloudinary.uploader.destroy(`portfolio-projects/${publicId}`, { resource_type: resourceType });
+      }
     } catch (error) {
       console.error("Error deleting image from Cloudinary:", error);
     }
