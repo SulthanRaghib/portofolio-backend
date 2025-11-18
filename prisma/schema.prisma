@@ -5,7 +5,7 @@
 // Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
 
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
   binaryTargets = ["native", "rhel-openssl-1.0.x"]
 }
 
@@ -22,23 +22,39 @@ model User {
   name      String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-  
+
   @@map("users")
 }
 
 model Project {
-  id           String   @id @default(uuid())
-  title        String
-  descriptionEn String  @map("description_en") @db.Text
-  descriptionId String  @map("description_id") @db.Text
-  image        String
-  technologies String[]
-  demoUrl      String?  @map("demo_url")
-  githubUrl    String?  @map("github_url")
-  featured     Boolean  @default(false)
-  order        Int      @default(0)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-  
+  id            String   @id @default(uuid())
+  title         String
+  descriptionEn String   @map("description_en")
+  descriptionId String   @map("description_id")
+  image         String
+  technologies  String[]
+  demoUrl       String?  @map("demo_url")
+  githubUrl     String?  @map("github_url")
+  featured      Boolean  @default(false)
+  order         Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
   @@map("projects")
+}
+
+model Certification {
+  id            String    @id @default(uuid())
+  title         String
+  issuer        String
+  issuedAt      DateTime
+  expirationAt  DateTime?
+  credentialUrl String?   @map("credential_url")
+  credentialId  String?   @map("credential_id")
+  skills        String[]
+  image         String
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@map("certifications")
 }
