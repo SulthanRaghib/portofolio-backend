@@ -14,8 +14,11 @@ const app = express();
 // Middleware
 app.use(helmet());
 app.use(cors());
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+// Increase body parser limits to allow larger JSON/payloads when appropriate.
+// Note: Vercel serverless functions have a hard request-body size limit —
+// large file uploads should be sent directly to Cloudinary/S3 from the client.
+app.use(express.json({ limit: "10mb" }));
+app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
 // Rate limiting
 const limiter = rateLimit({
