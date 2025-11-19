@@ -1,0 +1,100 @@
+name: CI/CD — Build, Test and Deploy to Vercel
+
+on:
+  push:
+    branches: ["master"]
+  pull_request:
+    branches: ["master"]
+  workflow_dispatch:
+
+jobs:
+  build-and-test:
+    name: Install + Build (Prisma generate)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "18"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run migrations (optional)
+        if: ${{ secrets.DIRECT_URL != '' }}
+        env:
+          DIRECT_URL: ${{ secrets.DIRECT_URL }}
+          NODE_ENV: production
+        run: |
+          # Jika Anda ingin menjalankan migration dari GitHub Actions, set secret DIRECT_URL
+          # Pastikan runner dapat mengakses host database (Supabase).
+          npm run build
+          npx prisma migrate deploy --schema=prisma/schema.prisma
+
+      - name: Generate Prisma client
+        run: npm run build
+
+      - name: Run basic checks
+        run: |
+          # Jika Anda punya test atau linter, jalankan di sini
+          echo "No tests configured; skip"
+
+  deploy:
+    name: Deploy to Vercel
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/master'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "18"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Deploy with Vercel CLI
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: |
+          # Pastikan Anda sudah menambahkan VERCEL_TOKEN, VERCEL_ORG_ID, VERCEL_PROJECT_ID
+          # Deploy ke production
+          set -e
+          DEPLOY_OUTPUT=$(npx vercel --prod --token $VERCEL_TOKEN --confirm --org $VERCEL_ORG_ID --project $VERCEL_PROJECT_ID --no-clipboard 2>&1 || true)
+          echo "$DEPLOY_OUTPUT"
+          # Extract first URL from output
+          DEPLOY_URL=$(echo "$DEPLOY_OUTPUT" | grep -Eo 'https?://[^ ]+' | head -n1 || true)
+          if [ -z "$DEPLOY_URL" ]; then
+            echo "Could not determine deploy URL from vercel output"
+            exit 1
+          fi
+          echo "DEPLOY_URL=$DEPLOY_URL" >> $GITHUB_ENV
+
+      - name: Health check (wait for service)
+        run: |
+          set -e
+          URL="$DEPLOY_URL"
+          echo "Checking: $URL/api/health or $URL/"
+          for i in 1 2 3 4 5; do
+            if curl -sSf "$URL/api/health" -m 10 >/dev/null 2>&1; then
+              echo "Health OK at $URL/api/health"
+              exit 0
+            fi
+            if curl -sSf "$URL/" -m 10 >/dev/null 2>&1; then
+              echo "Root OK at $URL/"
+              exit 0
+            fi
+            echo "Attempt $i failed - retrying in 10s"
+            sleep 10
+          done
+          echo "Health check failed for $URL"
+          exit 1
