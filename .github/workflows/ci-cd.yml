@@ -11,8 +11,6 @@ jobs:
   build-and-test:
     name: Install + Build (Prisma generate)
     runs-on: ubuntu-latest
-    env:
-      DIRECT_URL: ${{ secrets.DIRECT_URL }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -25,17 +23,6 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
-
-      - name: Run migrations (optional)
-        if: ${{ env.DIRECT_URL }}
-        env:
-          DATABASE_URL: ${{ secrets.DIRECT_URL }}
-          NODE_ENV: production
-        run: |
-          # Jika Anda ingin menjalankan migration dari GitHub Actions, set secret DIRECT_URL
-          # Pastikan runner dapat mengakses host database (Supabase).
-          npm run build
-          npx prisma migrate deploy --schema=prisma/schema.prisma
 
       - name: Generate Prisma client
         run: npm run build
