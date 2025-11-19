@@ -11,6 +11,8 @@ jobs:
   build-and-test:
     name: Install + Build (Prisma generate)
     runs-on: ubuntu-latest
+    env:
+      DIRECT_URL: ${{ secrets.DIRECT_URL }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -25,9 +27,8 @@ jobs:
         run: npm ci
 
       - name: Run migrations (optional)
-        if: ${{ secrets.DIRECT_URL != '' }}
+        if: ${{ env.DIRECT_URL }}
         env:
-          DIRECT_URL: ${{ secrets.DIRECT_URL }}
           NODE_ENV: production
         run: |
           # Jika Anda ingin menjalankan migration dari GitHub Actions, set secret DIRECT_URL
