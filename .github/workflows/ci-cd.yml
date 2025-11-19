@@ -29,6 +29,7 @@ jobs:
       - name: Run migrations (optional)
         if: ${{ env.DIRECT_URL }}
         env:
+          DATABASE_URL: ${{ secrets.DIRECT_URL }}
           NODE_ENV: production
         run: |
           # Jika Anda ingin menjalankan migration dari GitHub Actions, set secret DIRECT_URL
