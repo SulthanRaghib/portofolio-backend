@@ -382,3 +382,37 @@ Ensure all production values are set:
 ---
 
 Made with ❤️ for Portfolio Management
+
+**CI/CD (GitHub Actions → Vercel)**
+
+- **Ringkasan:** Workflow GitHub Actions (`.github/workflows/ci-cd.yml`) akan berjalan pada `push` ke branch `master`, pada `pull_request` terhadap `master`, dan dapat dijalankan manual (workflow_dispatch). Workflow ini menjalankan instalasi dependensi, menjalankan `npm run build` (yang di sini memicu `prisma generate`) lalu melakukan deploy ke Vercel menggunakan Vercel CLI.
+
+- **Apa yang dilakukan workflow:**
+
+  - Install dependencies (`npm ci`).
+  - Generate Prisma Client (`npm run build`).
+  - (Opsional) Jalankan test/linter jika Anda menambahkan skripnya.
+  - Deploy ke Vercel dengan `npx vercel --prod`.
+
+- **Secrets GitHub yang perlu ditambahkan** (Repository → Settings → Secrets & variables → Actions):
+
+  - `VERCEL_TOKEN` — token API Vercel (Personal Token).
+  - `VERCEL_ORG_ID` — ID organisasi/akun di Vercel.
+  - `VERCEL_PROJECT_ID` — ID project di Vercel.
+  - `DIRECT_URL` — _opsional_ (hanya jika Anda ingin menjalankan `prisma migrate deploy` dari GitHub Actions). Ini adalah direct connection URL ke Postgres (contoh: `postgresql://user:pass@host:5432/db`).
+
+- **Environment variables untuk build dan runtime (diatur di Vercel dashboard)**:
+
+  - `DATABASE_URL`, `DIRECT_URL` (agar `prisma migrate deploy` berjalan saat Vercel build jika perlu).
+  - `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET`.
+  - `JWT_SECRET`, dan variabel lain yang ada di `.env`.
+
+- **Catatan penting:**
+
+  - Workflow di atas menggunakan Vercel CLI untuk mendorong deploy dari runner CI. Vercel akan menjalankan build pada servernya (default) menggunakan variabel environment yang Anda set di dashboard Vercel.
+  - Jika Anda ingin menjalankan migration dari CI (bukan di Vercel build), Anda bisa menambahkan step `npx prisma migrate deploy` di job `deploy`, tetapi Anda harus menyimpan `DIRECT_URL` atau kredensial database sebagai Secret GitHub (perhatikan keamanan dan akses jaringan). Biasanya lebih aman menjalankan migration dari Vercel build atau pipeline yang memiliki akses internal ke database.
+
+- **Menjalankan/mengetes secara lokal sebelum push**:
+  1. Pastikan semua env vars terisi di `.env`.
+  2. Jalankan `npm ci` lalu `npm run build`.
+  3. Jika ingin mensimulasikan deploy, jalankan `npx vercel --prod --token <TOKEN> --confirm --org <ORG_ID> --project <PROJECT_ID>` (pastikan sudah login atau gunakan token).
