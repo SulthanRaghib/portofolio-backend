@@ -8,22 +8,54 @@ cloudinary.config({
   api_secret: process.env.CLOUDINARY_API_SECRET,
 });
 
-const storage = new CloudinaryStorage({
+// Storage untuk gambar (projects)
+const imageStorage = new CloudinaryStorage({
   cloudinary: cloudinary,
   params: {
     folder: "portfolio-projects",
-    // Allow images and PDFs. Set resource_type to 'auto' so non-image files like PDFs
-    // are accepted and stored correctly by Cloudinary.
-    resource_type: 'auto',
-    allowed_formats: ["jpg", "jpeg", "png", "webp", "pdf"],
+    resource_type: "image",
+    allowed_formats: ["jpg", "jpeg", "png", "webp"],
     transformation: [{ width: 1200, height: 800, crop: "limit" }],
   },
 });
 
-const upload = multer({
-  storage: storage,
-  // Increase file size limit to allow PDFs (10MB)
-  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
+// Storage untuk PDF (certifications)
+const pdfStorage = new CloudinaryStorage({
+  cloudinary: cloudinary,
+  params: async (req, file) => {
+    const isPDF = file.mimetype === "application/pdf";
+
+    return {
+      folder: "portfolio-certifications",
+      resource_type: isPDF ? "image" : "image", // "image" untuk PDF
+      allowed_formats: isPDF ? ["pdf"] : ["jpg", "jpeg", "png", "webp"],
+      format: isPDF ? "pdf" : undefined,
+      // Untuk PDF, generate preview dari halaman pertama
+      pages: isPDF ? true : undefined,
+    };
+  },
 });
 
-module.exports = { cloudinary, upload };
+const uploadImage = multer({
+  storage: imageStorage,
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB untuk gambar
+});
+
+const uploadCertification = multer({
+  storage: pdfStorage,
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB untuk PDF
+  fileFilter: (req, file, cb) => {
+    const allowedMimes = ["image/jpeg", "image/jpg", "image/png", "image/webp", "application/pdf"];
+    if (allowedMimes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error("Only images (JPG, PNG, WebP) and PDF files are allowed"));
+    }
+  },
+});
+
+module.exports = {
+  cloudinary,
+  upload: uploadImage, // untuk projects (backward compatibility)
+  uploadCertification
+};
