@@ -27,14 +27,16 @@ const pdfStorage = new CloudinaryStorage({
 
     return {
       folder: "portfolio-certifications",
-      resource_type: isPDF ? "image" : "image", // "image" untuk PDF
+      resource_type: isPDF ? "raw" : "image", // "raw" untuk PDF
       allowed_formats: isPDF ? ["pdf"] : ["jpg", "jpeg", "png", "webp"],
       format: isPDF ? "pdf" : undefined,
-      // Untuk PDF, generate preview dari halaman pertama
-      pages: isPDF ? true : undefined,
+      eager: [
+        { width: 600, format: "jpg", page: 1 }  // generate preview
+      ]
     };
   },
 });
+
 
 const uploadImage = multer({
   storage: imageStorage,
