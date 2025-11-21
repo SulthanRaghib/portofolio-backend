@@ -53,6 +53,11 @@ model Certification {
   credentialId  String?   @map("credential_id")
   skills        String[]
   image         String
+  isPDF         Boolean   @default(false)
+  pdfPages      Int? // jumlah halaman
+  thumbnail     String? // URL thumbnail halaman pertama
+  previewUrl    String? // URL PDF
+  previews      Json? // bisa simpan array of { page, url, thumbnail }
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
