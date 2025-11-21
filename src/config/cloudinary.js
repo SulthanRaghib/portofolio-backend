@@ -24,19 +24,27 @@ const pdfStorage = new CloudinaryStorage({
   cloudinary: cloudinary,
   params: async (req, file) => {
     const isPDF = file.mimetype === "application/pdf";
+    if (!isPDF) {
+      // fallback untuk gambar
+      return {
+        folder: "portfolio-certifications",
+        resource_type: "image",
+        allowed_formats: ["jpg", "jpeg", "png", "webp"],
+      };
+    }
 
     return {
       folder: "portfolio-certifications",
-      resource_type: isPDF ? "raw" : "image", // "raw" untuk PDF
-      allowed_formats: isPDF ? ["pdf"] : ["jpg", "jpeg", "png", "webp"],
-      format: isPDF ? "pdf" : undefined,
+      resource_type: "raw",       // raw untuk PDF
+      type: "upload",             // delivery type upload (publik)
+      format: "pdf",              // simpan sebagai pdf
+      pages: true,                // minta Cloudinary hitung jumlah halaman
       eager: [
-        { width: 600, format: "jpg", page: 1 }  // generate preview
-      ]
+        { page: 1, width: 600, format: "jpg" }  // generate thumbnail halaman pertama
+      ],
     };
   },
 });
-
 
 const uploadImage = multer({
   storage: imageStorage,

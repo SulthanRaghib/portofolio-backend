@@ -1,3 +1,4 @@
+// certificationController.js
 const prisma = require("../config/database");
 const { cloudinary } = require("../config/cloudinary");
 const {
@@ -11,67 +12,58 @@ const {
     calculateSkip,
 } = require("../utils/pagination");
 
-// Helper: Generate thumbnail URL dari PDF (halaman 1)
+// Helper: Generate thumbnail URL dari PDF (halaman tertentu, default hal 1)
 const generatePDFThumbnail = (pdfUrl, options = {}) => {
     const { width = 800, height = 1000, page = 1, quality = "auto" } = options;
-
-    // Extract public_id dari URL Cloudinary
     const parts = pdfUrl.split("/upload/");
     if (parts.length !== 2) return pdfUrl;
-
     const [base, path] = parts;
-
-    // Transformasi untuk PDF: ambil halaman pertama sebagai thumbnail
     const transformation = `w_${width},h_${height},c_fill,q_${quality},pg_${page}`;
-
     return `${base}/upload/${transformation}/${path}`;
 };
 
 // Helper: Generate preview URL untuk semua halaman PDF
 const generatePDFPreviewUrls = (pdfUrl, totalPages = 1) => {
     const previews = [];
-
     for (let page = 1; page <= totalPages; page++) {
         previews.push({
             page,
             url: generatePDFThumbnail(pdfUrl, { page, width: 1200 }),
-            thumbnail: generatePDFThumbnail(pdfUrl, { page, width: 400 })
+            thumbnail: generatePDFThumbnail(pdfUrl, { page, width: 400 }),
         });
     }
-
     return previews;
 };
 
-// Helper: Detect if URL is PDF
+// Helper: Detect if URL adalah PDF
 const isPDFUrl = (url) => {
-    return url && (url.endsWith('.pdf') || url.includes('.pdf?'));
+    return url && (url.toLowerCase().endsWith(".pdf") || url.toLowerCase().includes(".pdf?"));
 };
 
 // Helper: Get PDF metadata dari Cloudinary
 const getPDFMetadata = async (publicId) => {
     try {
         const result = await cloudinary.api.resource(publicId, {
-            resource_type: "image", // PDF disimpan sebagai image di Cloudinary
-            pages: true
+            resource_type: "raw",
+            pages: true,
         });
-
         return {
             pages: result.pages || 1,
             format: result.format,
             bytes: result.bytes,
-            url: result.secure_url
+            url: result.secure_url,
         };
     } catch (error) {
         console.error("Error getting PDF metadata:", error);
-        return { pages: 1 };
+        return { pages: 1, format: null, bytes: null, url: null };
     }
 };
 
 // Extract public_id dari Cloudinary URL
 const extractPublicId = (url) => {
     if (!url || typeof url !== "string") return null;
-
-    const regex = /portfolio-certifications\/([^/.]+)/;
+    // mungkin termasuk extension .pdf
+    const regex = /portfolio-certifications\/(.+?)(?:\.[^.]+)?$/;
     const match = url.match(regex);
     return match ? `portfolio-certifications/${match[1]}` : null;
 };
@@ -82,7 +74,6 @@ exports.getAllCertifications = async (req, res, next) => {
         const { page, limit } = getPaginationParams(req.query, 10, 50);
 
         const where = {};
-
         if (search) {
             where.OR = [
                 { title: { contains: search, mode: "insensitive" } },
@@ -92,17 +83,14 @@ exports.getAllCertifications = async (req, res, next) => {
         }
 
         let orderBy = { issuedAt: "desc" };
-
         if (sortBy) {
             const validSortFields = ["title", "issuer", "issuedAt", "createdAt"];
             if (validSortFields.includes(sortBy)) {
-                const direction = sortOrder === "asc" ? "asc" : "desc";
-                orderBy = { [sortBy]: direction };
+                orderBy = { [sortBy]: sortOrder === "asc" ? "asc" : "desc" };
             }
         }
 
         const totalItems = await prisma.certification.count({ where });
-
         const certifications = await prisma.certification.findMany({
             where,
             orderBy,
@@ -110,17 +98,15 @@ exports.getAllCertifications = async (req, res, next) => {
             take: limit,
         });
 
-        // Enhance dengan thumbnail untuk PDF
         const enhancedCertifications = certifications.map(cert => {
             const isPDF = isPDFUrl(cert.image);
-
             return {
                 ...cert,
                 isPDF,
                 thumbnail: isPDF
                     ? generatePDFThumbnail(cert.image, { width: 400, height: 500 })
                     : cert.image,
-                previewUrl: cert.image
+                previewUrl: cert.image,
             };
         });
 
@@ -157,13 +143,14 @@ exports.getCertificationById = async (req, res, next) => {
         const isPDF = isPDFUrl(certification.image);
         let pdfMetadata = null;
         let previews = [];
+        let thumbnailUrl = certification.image;
 
-        // Jika PDF, ambil metadata dan generate preview untuk semua halaman
         if (isPDF) {
             const publicId = extractPublicId(certification.image);
             if (publicId) {
                 pdfMetadata = await getPDFMetadata(publicId);
                 previews = generatePDFPreviewUrls(certification.image, pdfMetadata.pages);
+                thumbnailUrl = generatePDFThumbnail(certification.image);
             }
         }
 
@@ -171,11 +158,10 @@ exports.getCertificationById = async (req, res, next) => {
             certification: {
                 ...certification,
                 isPDF,
-                thumbnail: isPDF
-                    ? generatePDFThumbnail(certification.image)
-                    : certification.image,
+                thumbnail: thumbnailUrl,
+                previewUrl: certification.image,
                 pdfMetadata,
-                previews: isPDF ? previews : []
+                previews
             }
         });
     } catch (error) {
@@ -195,11 +181,8 @@ exports.createCertification = async (req, res, next) => {
             if (typeof skills === "string") {
                 try {
                     skills = JSON.parse(skills);
-                } catch (e) {
-                    skills = skills
-                        .split(",")
-                        .map((s) => s.trim())
-                        .filter((s) => s.length > 0);
+                } catch {
+                    skills = skills.split(",").map(s => s.trim()).filter(Boolean);
                 }
             }
             if (!Array.isArray(skills)) {
@@ -218,6 +201,26 @@ exports.createCertification = async (req, res, next) => {
             return res.status(400).json({ message: "Image or PDF is required" });
         }
 
+        const uploaded = req.file.path; // multer-storage-cloudinary menyimpan path sebagai URL
+        const isPDF = isPDFUrl(uploaded);
+
+        // Jika PDF, kita dapat metadata dan previews
+        let pdfPages = null;
+        let thumbnailUrl = uploaded;
+        let previewUrl = uploaded;
+        let previews = [];
+
+        if (isPDF) {
+            const publicId = extractPublicId(uploaded);
+            if (publicId) {
+                const meta = await getPDFMetadata(publicId);
+                pdfPages = meta.pages;
+                thumbnailUrl = generatePDFThumbnail(uploaded, { width: 400 });
+                previewUrl = uploaded;
+                previews = generatePDFPreviewUrls(uploaded, pdfPages);
+            }
+        }
+
         const certification = await prisma.certification.create({
             data: {
                 title,
@@ -226,22 +229,19 @@ exports.createCertification = async (req, res, next) => {
                 expirationAt: expirationAt ? new Date(expirationAt) : null,
                 credentialUrl: credentialUrl || null,
                 credentialId: credentialId || null,
-                skills: skills,
-                image: req.file.path,
-            },
+                skills,
+                image: uploaded,
+                isPDF,
+                pdfPages,
+                thumbnail: thumbnailUrl,
+                previewUrl,
+                previews
+            }
         });
-
-        const isPDF = isPDFUrl(certification.image);
 
         res.status(201).json({
             message: "Certification created",
-            certification: {
-                ...certification,
-                isPDF,
-                thumbnail: isPDF
-                    ? generatePDFThumbnail(certification.image)
-                    : certification.image
-            }
+            certification
         });
     } catch (error) {
         next(error);
@@ -263,31 +263,45 @@ exports.updateCertification = async (req, res, next) => {
         if (credentialId) credentialId = sanitizeInput(credentialId);
 
         let imageUrl = existingCert.image;
+        let isPDF = existingCert.isPDF;
+        let pdfPages = existingCert.pdfPages;
+        let thumbnailUrl = existingCert.thumbnail;
+        let previewUrl = existingCert.previewUrl;
+        let previews = existingCert.previews || [];
+
         if (req.file) {
             // Hapus file lama
-            const publicId = extractPublicId(existingCert.image);
-            if (publicId) {
-                try {
-                    await cloudinary.uploader.destroy(publicId, {
-                        resource_type: "image",
-                        invalidate: true
-                    });
-                } catch (error) {
-                    console.error("Error deleting old file:", error);
-                }
+            const publicIdOld = extractPublicId(existingCert.image);
+            if (publicIdOld) {
+                await cloudinary.uploader.destroy(publicIdOld, { resource_type: "raw", invalidate: true });
             }
             imageUrl = req.file.path;
+            isPDF = isPDFUrl(imageUrl);
+
+            if (isPDF) {
+                const publicId = extractPublicId(imageUrl);
+                if (publicId) {
+                    const meta = await getPDFMetadata(publicId);
+                    pdfPages = meta.pages;
+                    thumbnailUrl = generatePDFThumbnail(imageUrl, { width: 400 });
+                    previewUrl = imageUrl;
+                    previews = generatePDFPreviewUrls(imageUrl, pdfPages);
+                }
+            } else {
+                // jika bukan PDF, reset PDF related fields
+                pdfPages = null;
+                thumbnailUrl = imageUrl;
+                previewUrl = imageUrl;
+                previews = [];
+            }
         }
 
         if (skills !== undefined) {
             if (typeof skills === "string") {
                 try {
                     skills = JSON.parse(skills);
-                } catch (e) {
-                    skills = skills
-                        .split(",")
-                        .map((s) => s.trim())
-                        .filter((s) => s.length > 0);
+                } catch {
+                    skills = skills.split(",").map(s => s.trim()).filter(Boolean);
                 }
             }
             if (!Array.isArray(skills)) {
@@ -295,7 +309,7 @@ exports.updateCertification = async (req, res, next) => {
             }
         }
 
-        const certification = await prisma.certification.update({
+        const updated = await prisma.certification.update({
             where: { id },
             data: {
                 title: title || existingCert.title,
@@ -306,20 +320,17 @@ exports.updateCertification = async (req, res, next) => {
                 credentialId: credentialId !== undefined ? credentialId : existingCert.credentialId,
                 skills: skills !== undefined ? skills : existingCert.skills,
                 image: imageUrl,
-            },
+                isPDF,
+                pdfPages,
+                thumbnail: thumbnailUrl,
+                previewUrl,
+                previews
+            }
         });
-
-        const isPDF = isPDFUrl(certification.image);
 
         res.json({
             message: "Certification updated",
-            certification: {
-                ...certification,
-                isPDF,
-                thumbnail: isPDF
-                    ? generatePDFThumbnail(certification.image)
-                    : certification.image
-            }
+            certification: updated
         });
     } catch (error) {
         next(error);
@@ -336,14 +347,7 @@ exports.deleteCertification = async (req, res, next) => {
 
         const publicId = extractPublicId(cert.image);
         if (publicId) {
-            try {
-                await cloudinary.uploader.destroy(publicId, {
-                    resource_type: "image",
-                    invalidate: true
-                });
-            } catch (error) {
-                console.error("Cloudinary delete error:", error);
-            }
+            await cloudinary.uploader.destroy(publicId, { resource_type: "raw", invalidate: true });
         }
 
         await prisma.certification.delete({ where: { id } });
