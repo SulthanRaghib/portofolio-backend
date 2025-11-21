@@ -9,10 +9,16 @@ const projectRoutes = require("./routes/projectRoutes");
 const certificationRoutes = require("./routes/certificationRoutes");
 const errorHandler = require("./middleware/errorHandler");
 
+// Swagger imports
+const { swaggerUi, swaggerSpec } = require("../swagger/swagger");
+const { basicAuth, docsRateLimiter, getSwaggerUiOptions } = require("../swagger/protectDocs");
+
 const app = express();
 
 // Middleware
-app.use(helmet());
+app.use(helmet({
+  contentSecurityPolicy: false, // Allow Swagger UI resources
+}));
 app.use(cors());
 // Increase body parser limits to allow larger JSON/payloads when appropriate.
 // Note: Vercel serverless functions have a hard request-body size limit —
@@ -26,6 +32,22 @@ const limiter = rateLimit({
   max: 100,
 });
 app.use("/api", limiter);
+
+// Swagger Documentation Route
+// Protected dengan Basic Auth di production + rate limiter
+app.use(
+  "/api-docs",
+  docsRateLimiter,
+  basicAuth,
+  swaggerUi.serve,
+  swaggerUi.setup(swaggerSpec, getSwaggerUiOptions())
+);
+
+// Swagger JSON endpoint (untuk client tools)
+app.get("/api-docs.json", docsRateLimiter, basicAuth, (req, res) => {
+  res.setHeader("Content-Type", "application/json");
+  res.send(swaggerSpec);
+});
 
 // Testing environment variables
 app.get("/api/env-check", (req, res) => {
